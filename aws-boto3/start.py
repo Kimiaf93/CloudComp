@@ -93,7 +93,7 @@ print("Deleting old auto scaling group...")
 print("------------------------------------")
 
 try:
-    response = asClient.delete_auto_scaling_group(AutoScalingGroupName='tug-of-war-asg-autoscalinggroup', ForceDelete=True)
+    response = asClient.delete_auto_scaling_group(AutoScalingGroupName='kimiya-asg-autoscalinggroup', ForceDelete=True)
 except ClientError as e:
     print(e)
 
@@ -101,7 +101,7 @@ print("Deleting old launch configuration...")
 print("------------------------------------")
 
 try:
-    response = asClient.delete_launch_configuration(LaunchConfigurationName='tug-of-war-asg-launchconfig')
+    response = asClient.delete_launch_configuration(LaunchConfigurationName='kimiya-asg-launchconfig')
 except ClientError as e:
     print(e)
 
@@ -110,7 +110,7 @@ except ClientError as e:
 print("Deleting old instances...")
 print("------------------------------------")
 
-response = ec2Client.describe_instances(Filters=[{'Name': 'tag-key', 'Values': ['tug-of-war-asg']}])
+response = ec2Client.describe_instances(Filters=[{'Name': 'tag-key', 'Values': ['kimiya-asg']}])
 print(response)
 reservations = response['Reservations']
 for reservation in reservations:
@@ -126,7 +126,7 @@ print("Deleting old load balancer and deps...")
 print("------------------------------------")
 
 try:
-    response = elbv2Client.describe_load_balancers(Names=['tug-of-war-asg-loadbalancer'])
+    response = elbv2Client.describe_load_balancers(Names=['kimiya-asg-loadbalancer'])
     loadbalancer_arn = response.get('LoadBalancers', [{}])[0].get('LoadBalancerArn', '')
     response = elbv2Client.delete_load_balancer(LoadBalancerArn=loadbalancer_arn)
 
@@ -136,14 +136,14 @@ except ClientError as e:
     print(e)
 
 try:
-    response = elbv2Client.describe_target_groups(Names=['tug-of-war-asg-targetgroup'])
+    response = elbv2Client.describe_target_groups(Names=['kimiya-asg-targetgroup'])
     while len(response.get('TargetGroups', [{}])) > 0:
         targetgroup_arn = response.get('TargetGroups', [{}])[0].get('TargetGroupArn', '')
         try:
             response = elbv2Client.delete_target_group(TargetGroupArn=targetgroup_arn)
         except ClientError as e:
             print(e)
-        response = elbv2Client.describe_target_groups(Names=['tug-of-war-asg-targetgroup'])
+        response = elbv2Client.describe_target_groups(Names=['kimiya-asg-targetgroup'])
         time.sleep(5)
 except ClientError as e:
     print(e)
@@ -152,14 +152,14 @@ print("Delete old security group...")
 print("------------------------------------")
 
 try:
-    response = ec2Client.describe_security_groups(Filters=[{'Name': 'group-name', 'Values': ['tug-of-war-asg']}])
+    response = ec2Client.describe_security_groups(Filters=[{'Name': 'group-name', 'Values': ['kimiya-asg']}])
     while len(response.get('SecurityGroups', [{}])) > 0:
         security_group_id = response.get('SecurityGroups', [{}])[0].get('GroupId', '')
         try:
-            response = ec2Client.delete_security_group(GroupName='tug-of-war-asg')
+            response = ec2Client.delete_security_group(GroupName='kimiya-asg')
         except ClientError as e:
             print(e)
-        response = ec2Client.describe_security_groups(Filters=[{'Name': 'group-name', 'Values': ['tug-of-war-asg']}])
+        response = ec2Client.describe_security_groups(Filters=[{'Name': 'group-name', 'Values': ['kimiya-asg']}])
         time.sleep(5)
 except ClientError as e:
     print(e)
@@ -168,8 +168,8 @@ print("Create security group...")
 print("------------------------------------")
 
 try:
-    response = ec2Client.create_security_group(GroupName='tug-of-war-asg',
-                                               Description='tug-of-war-asg',
+    response = ec2Client.create_security_group(GroupName='kimiya-asg',
+                                               Description='kimiya-asg',
                                                VpcId=vpc_id)
     security_group_id = response['GroupId']
     print('Security Group Created %s in vpc %s.' % (security_group_id, vpc_id))
@@ -198,60 +198,6 @@ try:
 except ClientError as e:
     print(e)
 
-print("Running new DB instance...")
-print("------------------------------------")
-
-userDataDB = ('#!/bin/bash\n'
-              '# extra repo for RedHat rpms\n'
-              'yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm\n'
-              '# essential tools\n'
-              'yum install -y joe htop git\n'
-              '# mysql\n'
-              'yum install -y mariadb mariadb-server\n'
-              '\n'
-              'service mariadb start\n'
-              '\n'
-              'echo "create database cloud_tug_of_war" | mysql -u root\n'
-              '\n'
-              'echo "create table clouds ( cloud_id INT AUTO_INCREMENT, name VARCHAR(255) NOT NULL, value INT, max_value INT, PRIMARY KEY (cloud_id))" | mysql -u root cloud_tug_of_war\n'
-              '\n'
-              'echo "CREATE USER \'cloud_tug_of_war\'@\'%\' IDENTIFIED BY \'cloudpass\';" | mysql -u root\n'
-              'echo "GRANT ALL PRIVILEGES ON cloud_tug_of_war.* TO \'cloud_tug_of_war\'@\'%\';" | mysql -u root\n'
-              'echo "FLUSH PRIVILEGES" | mysql -u root\n'
-              )
-# convert user-data from script with: cat install-mysql | sed "s/^/'/; s/$/\\\n'/"
-
-response = ec2Client.run_instances(
-    ImageId=imageId,
-    InstanceType=instanceType,
-    Placement={'AvailabilityZone': availabilityZone1, },
-    KeyName=keyName,
-    MinCount=1,
-    MaxCount=1,
-    UserData=userDataDB,
-    SecurityGroupIds=[
-        security_group_id,
-    ],
-    TagSpecifications=[
-        {
-            'ResourceType': 'instance',
-            'Tags': [
-                {'Key': 'Name', 'Value': 'tug-of-war-asg-db1'},
-                {'Key': 'tug-of-war-asg', 'Value': 'db'}
-            ],
-        }
-    ],
-)
-
-instanceIdDB = response['Instances'][0]['InstanceId']
-privateIpDB = response['Instances'][0]['PrivateIpAddress']
-# privateIpDB = response['Instances'][0]['NetworkInterfaces'][0]['NetworkInterfaceId']
-
-instance = ec2Resource.Instance(instanceIdDB)
-instance.wait_until_running()
-
-print(instanceIdDB)
-
 userDataWebServer = ('#!/bin/bash\n'
                      '# extra repo for RedHat rpms\n'
                      'yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm\n'
@@ -262,16 +208,15 @@ userDataWebServer = ('#!/bin/bash\n'
                      '\n'
                      'service httpd start\n'
                      '\n'
-                     # 'wget http://mmnet.informatik.hs-fulda.de/cloudcomp/tug-of-war-in-the-clouds.tar.gz\n'
-                     # 'cp tug-of-war-in-the-clouds.tar.gz /var/www/html/\n'
-                     # 'tar zxvf tug-of-war-in-the-clouds.tar.gz\n'
+                     # 'wget http://mmnet.informatik.hs-fulda.de/cloudcomp/kimiya-in-the-clouds.tar.gz\n'
+                     # 'cp kimiya-in-the-clouds.tar.gz /var/www/html/\n'
+                     # 'tar zxvf kimiya-in-the-clouds.tar.gz\n'
                      'cd /var/www/html\n'
-                     'wget https://git-ce.rwth-aachen.de/sebastian.rieger/cloud-computing-msc-ai-examples/raw/master/example-projects/tug-of-war-in-the-clouds/web-content/index.php\n'
-                     'wget https://git-ce.rwth-aachen.de/sebastian.rieger/cloud-computing-msc-ai-examples/raw/master/example-projects/tug-of-war-in-the-clouds/web-content/cloud.php\n'
-                     'wget https://git-ce.rwth-aachen.de/sebastian.rieger/cloud-computing-msc-ai-examples/raw/master/example-projects/tug-of-war-in-the-clouds/web-content/config.php\n'
+                     'wget https://raw.githubusercontent.com/Kimiaf93/CloudComp/main/web-content/index.php\n'
+                     'wget https://raw.githubusercontent.com/Kimiaf93/CloudComp/main/web-content/guess.php\n'
+                     'wget https://raw.githubusercontent.com/Kimiaf93/CloudComp/main/web-content/reset.php\n'
                      '\n'
-                     '# change hostname of db connection\n'
-                     'sed -i s/localhost/' + privateIpDB + '/g /var/www/html/config.php\n'
+                     
                      )
 
 print("Creating launch configuration...")
@@ -282,7 +227,7 @@ response = asClient.create_launch_configuration(
     IamInstanceProfile=iamRole,
     ImageId=imageId,
     InstanceType=instanceType,
-    LaunchConfigurationName='tug-of-war-asg-launchconfig',
+    LaunchConfigurationName='kimiya-asg-launchconfig',
     UserData=userDataWebServer,
     KeyName=keyName,
     SecurityGroups=[
@@ -296,7 +241,7 @@ print("Creating load balancer...")
 print("------------------------------------")
 
 response = elbv2Client.create_load_balancer(
-    Name='tug-of-war-asg-loadbalancer',
+    Name='kimiya-asg-loadbalancer',
     Subnets=[
         subnet_id1,
         subnet_id2,
@@ -314,7 +259,7 @@ print("Creating target group...")
 print("------------------------------------")
 
 response = elbv2Client.create_target_group(
-    Name='tug-of-war-asg-targetgroup',
+    Name='kimiya-asg-targetgroup',
     Port=80,
     Protocol='HTTP',
     VpcId=vpc_id,
@@ -351,8 +296,8 @@ print("Creating auto scaling group...")
 print("------------------------------------")
 
 response = asClient.create_auto_scaling_group(
-    AutoScalingGroupName='tug-of-war-asg-autoscalinggroup',
-    LaunchConfigurationName='tug-of-war-asg-launchconfig',
+    AutoScalingGroupName='kimiya-asg-autoscalinggroup',
+    LaunchConfigurationName='kimiya-asg-launchconfig',
     MaxSize=3,
     MinSize=1,
     HealthCheckGracePeriod=120,
@@ -362,27 +307,27 @@ response = asClient.create_auto_scaling_group(
     ],
     VPCZoneIdentifier=subnet_id1 + ', ' + ', ' + subnet_id2 + ', ' + subnet_id3,
     Tags=[
-        {'Key': 'Name', 'Value': 'tug-of-war-asg-webserver', 'PropagateAtLaunch': True},
-        {'Key': 'tug-of-war', 'Value': 'webserver', 'PropagateAtLaunch': True}
+        {'Key': 'Name', 'Value': 'kimiya-asg-webserver', 'PropagateAtLaunch': True},
+        {'Key': 'kimiya', 'Value': 'webserver', 'PropagateAtLaunch': True}
     ],
 )
 
 print(loadbalancer_arn)
 print(targetgroup_arn)
-print('app/tug-of-war-asg-loadbalancer/'+str(loadbalancer_arn).split('/')[3]+'/targetgroup/tug-of-war-asg-targetgroup/'+str(targetgroup_arn).split('/')[2])
+print('app/kimiya-asg-loadbalancer/'+str(loadbalancer_arn).split('/')[3]+'/targetgroup/kimiya-asg-targetgroup/'+str(targetgroup_arn).split('/')[2])
 
 print('If target group is not found, creation was delayed in AWS Academy lab, need to add a check that target group is'
       'existing before executing the next lines in the future... If the error occurs, rerun script...')
 
 response = asClient.put_scaling_policy(
-    AutoScalingGroupName='tug-of-war-asg-autoscalinggroup',
-    PolicyName='tug-of-war-asg-scalingpolicy',
+    AutoScalingGroupName='kimiya-asg-autoscalinggroup',
+    PolicyName='kimiya-asg-scalingpolicy',
     PolicyType='TargetTrackingScaling',
     EstimatedInstanceWarmup=60,
     TargetTrackingConfiguration={
         'PredefinedMetricSpecification': {
             'PredefinedMetricType': 'ALBRequestCountPerTarget',
-            'ResourceLabel': 'app/tug-of-war-asg-loadbalancer/'+str(loadbalancer_arn).split('/')[3]+'/targetgroup/tug-of-war-asg-targetgroup/'+str(targetgroup_arn).split('/')[2]
+            'ResourceLabel': 'app/kimiya-asg-loadbalancer/'+str(loadbalancer_arn).split('/')[3]+'/targetgroup/kimiya-asg-targetgroup/'+str(targetgroup_arn).split('/')[2]
         },
         'TargetValue': 5.0,
     }
