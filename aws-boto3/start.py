@@ -3,6 +3,7 @@ import time
 import boto3
 from botocore.exceptions import ClientError
 
+print("Hello, Welcome to my cloud computing project!")
 
 ################################################################################################
 #
@@ -345,3 +346,6 @@ print('You can use "aws elbv2 ..." commands or the web console to examine the cu
 print('If you "pull" a lot of clouds in the game, generating a lot of requests, you will see the alarm being fired and'
       'further instances started (scale-out) (involves some clicking for about three minutes). After 15 min of idling,'
       'instances will automatically be stopped (scale-in).')
+
+
+print("Thank you for your attention. I hope you can guess the number correctly! :)")
