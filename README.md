@@ -47,9 +47,15 @@ This project is a **lightweight PHP web application** deployed on AWS infrastruc
 5. **Wait ~2–3 minutes. Once the script completes, it will display a URL like**:
    Load Balancer should be reachable at: http://kimiya-asg-loadbalancer-1122844693.us-east-1.elb.amazonaws.com
 6. **Open the link in a browser and enjoy the game!**
-
+   
 ## Want to scale to more instances?
 Just update this block in the Python script:
   ```bash
   MaxSize=3,  # change to 5, 7, etc.
   MinSize=1,
+ ```
+
+## Author
+Kimiya Fazlali <br>
+GitHub: [@Kimiaf93](https://github.com/Kimiaf93) <br>
+Email: <Kimiya.fazlali@informatik.hs-fulda.de>
